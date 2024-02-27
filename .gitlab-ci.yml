@@ -1,0 +1,39 @@
+---
+stages:
+  - binary
+  - build
+
+image: docker:stable-dind
+
+services:
+  - docker:dind
+
+before_script:
+  - apk add --no-cache
+    python3 python3-dev py3-pip gcc git curl build-base
+    autoconf automake py3-cryptography curl linux-headers
+    musl-dev libffi-dev openssl-dev openssh rsync
+  - curl https://sh.rustup.rs -sSf | sh -s -- -y
+  - source $HOME/.cargo/env
+  - docker info
+  - python3 --version
+  - python3 -m pip install ansible molecule-plugins[docker]
+  - ansible-galaxy collection install community.docker
+  - ansible --version
+  - molecule --version
+
+test-binary-mode:
+  stage: binary
+  script:
+    - molecule test --scenario-name binary
+
+test-build-mode:
+  stage: build
+  rules:
+    - if: '$CI_COMMIT_BEFORE_SHA == "0000000000000000000000000000000000000000"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH != "main"'
+      when: never
+    - when: on_success
+  script:
+    - molecule test --scenario-name build

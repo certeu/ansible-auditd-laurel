@@ -1,0 +1,14 @@
+---
+laurel_deps_packages_binary:
+  - curl
+
+laurel_deps_packages:
+  - auditd
+  - audispd-plugins
+
+laurel_build_packages:
+  - git
+  - cargo
+  - clang
+  - libacl1-dev
+  - curl

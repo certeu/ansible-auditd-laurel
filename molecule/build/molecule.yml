@@ -1,0 +1,39 @@
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: "rocky8"
+    image: "rockylinux:8"
+    dockerfile: ../common/Dockerfile-rocky8
+    command: /sbin/init
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: yes
+    pre_build_image: no
+  - name: "debian12"
+    image: "debian:12"
+    dockerfile: ../common/Dockerfile-deb12
+    command: /sbin/init
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: yes
+    pre_build_image: no
+provisioner:
+  name: ansible
+  options:
+      tags: build
+      skip-tags: binary
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - prepare
+    - converge
+    - destroy
+verifier:
+  name: ansible
+

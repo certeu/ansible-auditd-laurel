@@ -1,0 +1,3 @@
+FROM debian:12
+
+RUN apt-get update && apt-get install -y init python3 procps rsync && apt-get clean all

@@ -1,0 +1,11 @@
+---
+- name: Prepare
+  hosts: all
+
+  tasks:
+    - name: Ensure the user splunkfwd is created
+      ansible.builtin.user:
+        name: splunkfwd
+        system: true
+      tags:
+        - always

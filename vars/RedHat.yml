@@ -1,0 +1,14 @@
+---
+laurel_deps_packages_binary:
+  - curl
+
+laurel_deps_packages:
+  - audit
+  - audit-libs
+
+laurel_build_packages:
+  - git
+  - cargo
+  - clang
+  - libacl-devel
+  - curl

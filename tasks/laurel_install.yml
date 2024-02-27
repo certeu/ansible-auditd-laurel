@@ -1,0 +1,233 @@
+---
+- name: Install Auditd and dependencies
+  tags:
+    - install
+  block:
+    - name: Ensure that laurel_user_allowed_read variable exists
+      fail:
+        msg: "laurel_user_allowed_read is a mandatory var to execute the playbook. Variables must be set globally (group_vars) or passed as extra variable -e"
+      when: laurel_user_allowed_read is not defined
+
+    - name: Verify that user actually exists
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ laurel_user_allowed_read }}"
+
+    - name: Ensure Auditd is installed
+      ansible.builtin.package:
+        name: "{{ laurel_deps_packages }}"
+        state: present
+      tags:
+        - always
+
+    - name: Ensure dependencies for Laurel are present to fetch Laurel (Debian)
+      ansible.builtin.apt:
+        name: "{{ laurel_deps_packages_binary }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+      tags:
+        - binary
+
+    - name: Ensure dependencies for Laurel are present to fetch Laurel (RedHat)
+      ansible.builtin.package:
+        name: "{{ laurel_deps_packages_binary }}"
+        state: present
+      when: ansible_os_family == 'RedHat'
+      tags:
+        - binary
+
+    - name: Ensure dependencies for Laurel are present for build (Debian)
+      ansible.builtin.apt:
+        name: "{{ laurel_build_packages }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+      tags:
+        - never
+        - build
+
+    - name: Ensure dependencies for Laurel are present for build (RedHat)
+      ansible.builtin.package:
+        name: "{{ laurel_build_packages }}"
+        state: present
+      when: ansible_os_family == 'RedHat'
+      tags:
+        - never
+        - build
+
+    - name: Ensure the user is created "{{ laurel_user }}"
+      ansible.builtin.user:
+        name: "{{ laurel_user }}"
+        system: true
+        home: /var/log/laurel
+
+- name: Fetch Laurel binary from GitHub
+  tags:
+    - install
+    - binary
+  block:
+    - name: Retrieve the last version from Laurel
+      connection: local
+      become: false
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/threathunters-io/laurel/releases/latest
+      register: json_reponse
+
+    - name: Download the latest build (based on musl version) locally
+      connection: local
+      become: false
+      ansible.builtin.get_url:
+        url: "https://github.com/threathunters-io/laurel/releases/download/{{ json_reponse.json.tag_name }}/laurel-{{ json_reponse.json.tag_name }}-x86_64-musl.tar.gz"
+        dest: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+      when: test is not defined
+
+    - name: Download the latest build (based on musl version) on target
+      become: false
+      ansible.builtin.get_url:
+        url: "https://github.com/threathunters-io/laurel/releases/download/{{ json_reponse.json.tag_name }}/laurel-{{ json_reponse.json.tag_name }}-x86_64-musl.tar.gz"
+        dest: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        force: true
+      when: test is defined
+
+    - name: Ensure the directory for Laurel installation is created
+      ansible.builtin.file:
+        path: "{{ laurel_build_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0644
+        recurse: yes
+
+    - name: Copy Laurel binary
+      ansible.builtin.copy:
+        src: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        dest: "{{ laurel_build_dir }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        owner: root
+        group: root
+        force: true
+        remote_src: true
+      when: test is defined
+
+    - name: Send Laurel binary
+      ansible.builtin.copy:
+        src: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        dest: "{{ laurel_build_dir }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        owner: root
+        group: root
+        force: true
+      when: test is not defined
+
+    - name: Decompress Laurel binary
+      ansible.builtin.shell: "tar xzf laurel-{{ json_reponse.json.tag_name }}.tar.gz laurel"
+      args:
+        chdir: "{{ laurel_build_dir }}"
+
+    - name: Copy and set attribute
+      ansible.builtin.shell: "install -m755 laurel /usr/local/sbin/laurel"
+      args:
+        chdir: "{{ laurel_build_dir }}"
+
+- name: Build Laurel
+  tags:
+    - never
+    - build
+  block:
+    - name: Test - Git clone Laurel repo
+      ansible.builtin.git:
+        repo: https://github.com/threathunters-io/laurel.git
+        dest: "{{ laurel_local_tmp }}/laurel"
+      when: test is defined
+
+    - name: Git clone Laurel repo locally
+      connection: local
+      become: false
+      ansible.builtin.git:
+        repo: https://github.com/threathunters-io/laurel.git
+        dest: "{{ laurel_local_tmp }}/laurel"
+      when: test is not defined
+
+    - name: Ensure the directory for Laurel installation is created
+      ansible.builtin.file:
+        path: "{{ laurel_build_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0644
+        recurse: yes
+
+    - name: Test - Copy laurel repo
+      ansible.builtin.copy:
+        src: "{{ laurel_local_tmp }}/laurel/"
+        dest: "{{ laurel_build_dir }}"
+        owner: root
+        group: root
+        mode: '0750'
+        remote_src: yes
+      when: test is defined
+
+    - name: Copy laurel repo
+      ansible.builtin.copy:
+        src: "{{ laurel_local_tmp }}/laurel/"
+        dest: "{{ laurel_build_dir }}"
+        owner: root
+        group: root
+        mode: '0750'
+      when: test is not defined
+
+    - name: Build Laurel using Cargo
+      ansible.builtin.shell: cargo build --release
+      args:
+        chdir: "{{ laurel_build_dir }}"
+
+    - name: Copy laurel binary
+      ansible.builtin.copy:
+        src: "{{ laurel_build_dir }}/target/release/laurel"
+        dest: /usr/local/sbin/laurel
+        owner: root
+        group: root
+        mode: '0750'
+        remote_src: true
+
+  rescue:
+    - name: Failed to build Laurel using cargo from the packet manager going for install from https://sh.rustup.rs (Rust)
+      ansible.builtin.pause:
+        seconds: 2
+
+    - name: Remove Rustc and Cargo
+      ansible.builtin.package:
+        name:
+          - rustc
+          - cargo
+        state: absent
+
+    - name: Download script from Rust
+      ansible.builtin.get_url:
+        url: https://sh.rustup.rs
+        dest: /tmp/rustinstall.sh
+
+    - name: Install Rust Compiler
+      ansible.builtin.shell: sh rustinstall.sh -q -y
+      args:
+        chdir: /tmp/
+
+    - name: Build Laurel using Cargo
+      ansible.builtin.shell: /root/.cargo/bin/cargo build --release
+      args:
+        chdir: "{{ laurel_build_dir }}"
+
+    - name: Add the user "{{ laurel_user }}"
+      ansible.builtin.user:
+        name: "{{ laurel_user }}"
+        system: true
+        home: /var/log/laurel
+
+    - name: Copy laurel binary
+      ansible.builtin.copy:
+        src: "{{ laurel_build_dir }}/target/release/laurel"
+        dest: /usr/local/sbin/laurel
+        owner: root
+        group: root
+        mode: '0750'
+        remote_src: true
+

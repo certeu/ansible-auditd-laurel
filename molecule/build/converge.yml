@@ -1,0 +1,14 @@
+- name: Converge
+  hosts: all
+  become: no
+  gather_facts: yes
+
+  tasks:
+    - name: "Include ansible-auditd-laurel"
+      include_role:
+        name: "ansible-auditd-laurel"
+      vars:
+        laurel_local_tmp: "/tmp"
+        test: true
+  tags:
+    - build

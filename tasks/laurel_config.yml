@@ -1,0 +1,220 @@
+---
+- name: Configure Auditd and Laurel
+  tags:
+    - build
+    - install
+    - config
+  block:
+    - name: Check if /etc/audit directory exists
+      stat:
+        path: /etc/audit
+      register: auditd_path
+
+    - debug: var=auditd_path.stat.path
+      when: auditd_path.stat.path == "/etc/audit"
+
+    - name: Check if /etc/audisp directory exists
+      stat:
+        path: /etc/audisp
+      register: audit_path
+      when: auditd_path.stat.path != "/etc/audit"
+
+    - debug: var=audit_path.stat.path
+
+    - name: Display the value of auditd_path
+      debug:
+        var: auditd_path.stat.path
+
+    - name: Ensure Auditd rules are set
+      ansible.builtin.template:
+        src: auditd.rules.j2
+        dest: "{{ auditd_path.stat.path }}/rules.d/audit.rules"
+        owner: root
+        group: root
+        mode: '0640'
+      when: test is not defined
+
+    - name: Ensures Laurel config path exists
+      ansible.builtin.file:
+        path: /etc/laurel/
+        owner: "{{ laurel_user }}"
+        group: "{{ laurel_user }}"
+        state: directory
+        mode: '0640'
+
+    - name: Ensure Laurel config is set
+      ansible.builtin.template:
+        src: config.toml.j2
+        dest: /etc/laurel/config.toml
+        owner: "{{ laurel_user }}"
+        group: "{{ laurel_user }}"
+        mode: '0640'
+
+    - name: Ensures Auditd plugin path exists
+      ansible.builtin.file:
+        path: "{{ auditd_path.stat.path }}/plugins.d/"
+        owner: root
+        group: root
+        state: directory
+        mode: '0740'
+
+    - name: Register Laurel as auditd plugin
+      ansible.builtin.template:
+        src: laurel.conf.j2
+        dest: "{{ auditd_path.stat.path }}/plugins.d/laurel.conf"
+        owner: root
+        group: root
+        mode: '0740'
+
+    - name: Test (switching local events to no)
+      lineinfile:
+        path: /etc/audit/auditd.conf
+        regexp: '^local_events ='
+        line: 'local_events = no'
+      when: test is defined
+
+    - name: Enable Auditd service
+      ansible.builtin.systemd:
+        name: auditd
+        state: started
+        enabled: yes
+
+- name: Configure SELinux for Laurel
+  tags:
+    - install
+    - binary
+  when: ansible_facts.selinux.status == 'enabled'
+  block:
+    - name: Ensure SE Linux policy headers are present
+      ansible.builtin.package:
+        name: selinux-policy-devel
+        state: present
+
+    - name: Git clone Laurel repo locally
+      connection: local
+      become: false
+      ansible.builtin.git:
+        repo: https://github.com/threathunters-io/laurel.git
+        dest: "{{ laurel_local_tmp }}/laurel"
+        version: "{{ json_reponse.json.tag_name }}"
+      when: test is not defined
+
+    - name: Git clone Laurel repo (TEST)
+      ansible.builtin.git:
+        repo: https://github.com/threathunters-io/laurel.git
+        dest: "{{ laurel_local_tmp }}/laurel"
+        version: "{{ json_reponse.json.tag_name }}"
+      when: test is defined
+
+    - name: Ensure the directory for SELinux is created
+      ansible.builtin.file:
+        path: "{{ laurel_build_dir }}/selinux"
+        state: directory
+        owner: root
+        group: root
+        mode: 0644
+        recurse: yes
+
+    - name: Find files in the laurel/contrib/selinux/
+      connection: local
+      become: false
+      ansible.builtin.find:
+        paths: "{{ laurel_local_tmp }}/laurel/contrib/selinux/"
+        recurse: yes
+        file_type: file
+      register: found_files
+
+    - name: Copy SELinux files
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ laurel_build_dir }}/selinux/{{ item.path | basename }}"
+      with_items: "{{ found_files.files }}"
+      when: test is not defined
+
+    - name: Compile SELinux policy
+      ansible.builtin.shell: make
+      args:
+        chdir: "{{ laurel_build_dir }}/selinux"
+
+    - name: Install the policy into the running kernel
+      ansible.builtin.shell: semodule -i laurel.pp
+      args:
+        chdir: "{{ laurel_build_dir }}/selinux"
+
+    - name: Restores the default SELinux security contexts
+      ansible.builtin.shell: restorecon -v -R -F /usr/local/sbin/laurel /etc/laurel /var/log/laurel
+      args:
+        chdir: "{{ laurel_build_dir }}/selinux"
+
+- name: Configure SELinux for Laurel (when if build selected)
+  tags:
+    - never
+    - build
+
+  when: ansible_facts.selinux.status == 'enabled'
+  block:
+    - name: Ensure SE Linux policy headers are present
+      ansible.builtin.package:
+        name: selinux-policy-devel
+        state: present
+
+    - name: Compile SELinux policy
+      ansible.builtin.shell: make
+      args:
+        chdir: "{{ laurel_build_dir }}/contrib/selinux"
+
+    - name: Compile SELinux policy (when building)
+      ansible.builtin.shell: make
+      args:
+        chdir: "{{ laurel_build_dir }}/contrib/selinux"
+
+    - name: Install the policy into the running kernel
+      ansible.builtin.shell: semodule -i contrib/selinux/laurel.pp
+      args:
+        chdir: "{{ laurel_build_dir }}"
+
+    - name: Restores the default SELinux security contexts
+      ansible.builtin.shell: restorecon -v -R -F /usr/local/sbin/laurel /etc/laurel /var/log/laurel
+      args:
+        chdir: "{{ laurel_build_dir }}"
+
+- name: Loading Auditd rules and test if Laurel is running
+  tags:
+    - build
+    - install
+    - config
+  block:
+    - name: Restart Auditd service
+      ansible.builtin.systemd:
+        name: auditd
+        state: restarted
+      when: ansible_os_family == 'Debian'
+
+    - name: Restart Auditd service
+      ansible.builtin.service:
+        name: auditd
+        state: restarted
+        use: service
+      when: ansible_os_family == 'RedHat'
+
+    - name: Ensure Auditd read the applied rules
+      ansible.builtin.shell: "auditctl -R {{ auditd_path.stat.path }}/rules.d/audit.rules"
+      when: test is not defined
+
+    - name: Ensure Auditd load the rules
+      ansible.builtin.shell: augenrules --load
+      when: test is not defined
+
+    - name: Verify if the rules are being properly loaded
+      ansible.builtin.shell: auditctl -l
+      register: audit_rules
+      failed_when: "'No rules' in audit_rules.stdout"
+      when: test is not defined
+
+    - name: Tell auditd to re-evaluate its configuration
+      ansible.builtin.shell: pkill -HUP auditd
+
+    - name: Verify Laurel is running
+      ansible.builtin.shell: ps aux | grep laurel
+      register: laurel_run
+      failed_when: "'/usr/local/sbin/laurel' not in laurel_run.stdout"

@@ -1,0 +1,17 @@
+---
+# OS variables
+
+- name: Include os family-specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+  tags:
+    - always
+
+# Install deps and build Laurel
+
+- name: Install Laurel (build by default but has the ability to download the binary from the GitHub)
+  ansible.builtin.import_tasks: laurel_install.yml
+
+# Configure Auditd and Laurel
+
+- name: Configure Auditd and Laurel
+  ansible.builtin.import_tasks: laurel_config.yml
