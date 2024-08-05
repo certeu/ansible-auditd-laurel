@@ -26,8 +26,8 @@
         var: auditd_path.stat.path
 
     - name: Ensure Auditd rules are set
-      ansible.builtin.template:
-        src: auditd.rules.j2
+      ansible.builtin.copy:
+        src: auditd.rules
         dest: "{{ auditd_path.stat.path }}/rules.d/audit.rules"
         owner: root
         group: root
