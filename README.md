@@ -91,7 +91,7 @@ This role allows you to push Auditd and/or Laurel configuration files and avoid 
 
 We are providing an Auditd's configuration copy from Florian Roth's repo (https://github.com/Neo23x0/auditd).
 
-You can replace this configuration with your own by editing the file [auditd.rules.j2](./templates/auditd.rules.j2).
+You can replace this configuration with your own by editing the file [auditd.rules.j2](./files/auditd.rules).
 
 # Laurel Configuration
 
