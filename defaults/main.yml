@@ -3,3 +3,4 @@ laurel_user: _laurel
 laurel_build_dir: /var/_install/laurel
 laurel_user_allowed_read: splunkfwd
 laurel_local_tmp: /tmp
+laurel_version: "latest"
