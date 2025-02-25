@@ -67,26 +67,42 @@
     - install
     - binary
   block:
+
+    - name: Set source_version for Laurel based on the laurel_version variable
+      set_fact:
+        source_version: "{{ laurel_version }}"
+      when: laurel_version != "latest"
+
     - name: Retrieve the last version from Laurel
       connection: local
       become: false
       ansible.builtin.uri:
         url: https://api.github.com/repos/threathunters-io/laurel/releases/latest
       register: json_reponse
+      when: laurel_version == "latest"
+
+    - name: Set source_version based on the json_reponse variable
+      set_fact:
+        source_version: "{{ json_reponse.json.tag_name }}"
+      when: laurel_version == "latest"
+
+    - name: Strip the v from the source_version
+      set_fact:
+        asset_source_version: "{{ source_version | regex_replace('^v', '') }}"
 
     - name: Download the latest build (based on musl version) locally
       connection: local
       become: false
       ansible.builtin.get_url:
-        url: "https://github.com/threathunters-io/laurel/releases/download/{{ json_reponse.json.tag_name }}/laurel-{{ json_reponse.json.tag_name }}-x86_64-musl.tar.gz"
-        dest: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        url: "https://github.com/threathunters-io/laurel/releases/download/{{ source_version }}/laurel-{{ asset_source_version }}-x86_64-musl.tar.gz"
+        dest: "{{ laurel_local_tmp }}/laurel-{{ asset_source_version }}.tar.gz"
       when: test is not defined
 
     - name: Download the latest build (based on musl version) on target
       become: false
       ansible.builtin.get_url:
-        url: "https://github.com/threathunters-io/laurel/releases/download/{{ json_reponse.json.tag_name }}/laurel-{{ json_reponse.json.tag_name }}-x86_64-musl.tar.gz"
-        dest: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        url: "https://github.com/threathunters-io/laurel/releases/download/{{ source_version }}/laurel-{{ asset_source_version }}-x86_64-musl.tar.gz"
+        dest: "{{ laurel_local_tmp }}/laurel-{{ asset_source_version }}.tar.gz"
         force: true
       when: test is defined
 
@@ -101,8 +117,8 @@
 
     - name: Copy Laurel binary
       ansible.builtin.copy:
-        src: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
-        dest: "{{ laurel_build_dir }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        src: "{{ laurel_local_tmp }}/laurel-{{ asset_source_version }}.tar.gz"
+        dest: "{{ laurel_build_dir }}/laurel-{{ asset_source_version }}.tar.gz"
         owner: root
         group: root
         force: true
@@ -111,22 +127,27 @@
 
     - name: Send Laurel binary
       ansible.builtin.copy:
-        src: "{{ laurel_local_tmp }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
-        dest: "{{ laurel_build_dir }}/laurel-{{ json_reponse.json.tag_name }}.tar.gz"
+        src: "{{ laurel_local_tmp }}/laurel-{{ asset_source_version }}.tar.gz"
+        dest: "{{ laurel_build_dir }}/laurel-{{ asset_source_version }}.tar.gz"
         owner: root
         group: root
         force: true
       when: test is not defined
 
     - name: Decompress Laurel binary
-      ansible.builtin.shell: "tar xzf laurel-{{ json_reponse.json.tag_name }}.tar.gz laurel"
-      args:
-        chdir: "{{ laurel_build_dir }}"
+      ansible.builtin.unarchive:
+        src: "{{ laurel_build_dir }}/laurel-{{ asset_source_version }}.tar.gz"
+        dest: "{{ laurel_build_dir }}"
+        remote_src: yes
+        extra_opts:
+        - --strip=1
+        - --no-anchored
+        - laurel-{{ asset_source_version }}-x86_64-musl/bin/laurel
 
     - name: Copy and set attribute
       ansible.builtin.shell: "install -m755 laurel /usr/local/sbin/laurel"
       args:
-        chdir: "{{ laurel_build_dir }}"
+        chdir: "{{ laurel_build_dir }}/laurel-{{ asset_source_version }}-x86_64-musl/bin"
 
 - name: Build Laurel
   tags:

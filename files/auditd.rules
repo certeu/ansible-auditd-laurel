@@ -91,11 +91,37 @@
 -a exit,never -F arch=b64 -S all -F exe=/usr/bin/vmtoolsd
 
 ## High Volume Event Filter (especially on Linux Workstations)
--a never,exit -F arch=b64 -F dir=/dev/shm -k sharedmemaccess
--a never,exit -F arch=b64 -F dir=/var/lock/lvm -k locklvm
+-a never,exit -F arch=b32 -F dir=/dev/shm/ -F key=sharedmemaccess
+-a never,exit -F arch=b64 -F dir=/dev/shm/ -F key=sharedmemaccess
 
-## FileBeat
--a never,exit -F arch=b64 -F path=/opt/filebeat -k filebeat
+-a never,exit -F arch=b32 -F dir=/var/lock/lvm/ -F key=locklvm
+-a never,exit -F arch=b64 -F dir=/var/lock/lvm/ -F key=locklvm
+
+## Filebeat
+### https://www.elastic.co/guide/en/beats/filebeat/current/directory-layout.html
+
+-a never,exit -F arch=b32 -F path=/opt/filebeat -F perm=wa -F key=filebeat
+-a never,exit -F arch=b64 -F path=/opt/filebeat -F perm=wa -F key=filebeat
+
+-a always,exit -F arch=b32 -F dir=/etc/filebeat/ -F perm=wa -F key=filebeat
+-a always,exit -F arch=b64 -F dir=/etc/filebeat/ -F perm=wa -F key=filebeat
+
+-a always,exit -F arch=b32 -F dir=/usr/share/filebeat/ -F perm=wa -F key=filebeat
+-a always,exit -F arch=b64 -F dir=/usr/share/filebeat/ -F perm=wa -F key=filebeat
+
+-a always,exit -F arch=b64 -F dir=/usr/share/filebeat/bin/ -F perm=x -F key=filebeat
+-a always,exit -F arch=b32 -F dir=/usr/share/filebeat/bin/ -F perm=x -F key=filebeat
+
+### macOS
+#### https://www.elastic.co/guide/en/beats/filebeat/7.17/directory-layout.html
+-a always,exit -F arch=b32 -F path=/usr/local/var/homebrew/linked/filebeat-full -F perm=x -F key=filebeat
+-a always,exit -F arch=b64 -F path=/usr/local/var/homebrew/linked/filebeat-full -F perm=x -F key=filebeat
+
+-a always,exit -F arch=b32 -F dir=/usr/local/var/homebrew/linked/filebeat-full/bin/ -F perm=x -F key=filebeat
+-a always,exit -F arch=b64 -F dir=/usr/local/var/homebrew/linked/filebeat-full/bin/ -F perm=x -F key=filebeat
+
+-a always,exit -F arch=b32 -F dir=/usr/local/etc/filebeat/ -F perm=wa -F key=filebeat
+-a always,exit -F arch=b64 -F dir=/usr/local/etc/filebeat/ -F perm=wa -F key=filebeat
 
 ## More information on how to filter events
 ### https://access.redhat.com/solutions/2482221
@@ -187,8 +213,8 @@
 -a always,exit -F arch=b64 -S sethostname -S setdomainname -k network_modifications
 
 ### Detect Remote Shell Use
--a always,exit -F arch=b64 -F exe=/bin/bash -F success=1 -S connect -k "remote_shell"
--a always,exit -F arch=b64 -F exe=/usr/bin/bash -F success=1 -S connect -k "remote_shell"
+-a always,exit -F arch=b64 -F exe=/bin/bash -F success=1 -S connect -k remote_shell
+-a always,exit -F arch=b64 -F exe=/usr/bin/bash -F success=1 -S connect -k remote_shell
 
 ### Successful IPv4 Connections
 -a always,exit -F arch=b64 -S connect -F a2=16 -F success=1 -F key=network_connect_4
@@ -410,6 +436,28 @@
 -w /usr/bin/zstd -p x -k Data_Compressed
 -w /usr/local/bin/zstd -p x -k Data_Compressed
 
+## gzexe
+-a always,exit -F arch=b32 -F path=/usr/bin/gzexe -F perm=x -F key=Data_Compressed
+-a always,exit -F arch=b64 -F path=/usr/bin/gzexe -F perm=x -F key=Data_Compressed
+
+-a always,exit -F arch=b32 -F path=/usr/sbin/gzexe -F perm=x -F key=Data_Compressed
+-a always,exit -F arch=b64 -F path=/usr/sbin/gzexe -F perm=x -F key=Data_Compressed
+
+### macOS
+
+-a always,exit -F arch=b32 -F path=/usr/local/bin/gzexe -F perm=x -F key=Data_Compressed
+-a always,exit -F arch=b64 -F path=/usr/local/bin/gzexe -F perm=x -F key=Data_Compressed
+
+### https://www.rkeene.org/oss/dact
+-a always,exit -F arch=b32 -F path=/usr/bin/dact -F perm=x -F key=Data_Compressed
+-a always,exit -F arch=b64 -F path=/usr/bin/dact -F perm=x -F key=Data_Compressed
+
+-a always,exit -F arch=b32 -F path=/usr/sbin/dact -F perm=x -F key=Data_Compressed
+-a always,exit -F arch=b64 -F path=/usr/sbin/dact -F perm=x -F key=Data_Compressed
+
+-a always,exit -F arch=b32 -F path=/usr/local/bin/dact -F perm=x -F key=Data_Compressed
+-a always,exit -F arch=b64 -F path=/usr/local/bin/dact -F perm=x -F key=Data_Compressed
+
 ## Added to catch netcat on Ubuntu
 -w /bin/nc.openbsd -p x -k susp_activity
 -w /bin/nc.traditional -p x -k susp_activity
@@ -466,7 +514,7 @@
 -w /bin/yash -p x -k susp_shell
 -w /usr/bin/yash -p x -k susp_shell
 
-# Web Server Actvity
+# Web Server Activity
 ## Change the number "33" to the ID of your WebServer user. Default: www-data:x:33:33
 -a always,exit -F arch=b64 -S execve -F euid=33 -k detect_execve_www
 
@@ -638,6 +686,38 @@
 -w /usr/local/bin/ack -p x -k string_search
 -w /usr/bin/semgrep -p x -k string_search
 
+# CrowdStrike Falcon
+# Identify CrowdStrike Falcon Sensor updates
+-a always,exit -F arch=b32 -F path=/etc/crowdstrike/falcon-sensor.conf -p wa -F key=falcon_sensor_update
+-a always,exit -F arch=b64 -F path=/etc/crowdstrike/falcon-sensor.conf -p wa -F key=falcon_sensor_update
+
+-a always,exit -F arch=b32 -F path=/usr/lib/crowdstrike/falcon-sensor.conf -p wa -F key=falcon_sensor_update
+-a always,exit -F arch=b64 -F path=/usr/lib/crowdstrike/falcon-sensor.conf -p wa -F key=falcon_sensor_update
+
+# Identify CrowdStrike Falcon Sensor
+-a always,exit -F arch=b32 -F dir=/etc/crowdstrike/ -p wa -F key=falcon_sensor
+-a always,exit -F arch=b64 -F dir=/etc/crowdstrike/ -p wa -F key=falcon_sensor
+
+-a always,exit -F arch=b32 -F dir=/usr/lib/crowdstrike/ -p wa -F key=falcon_sensor
+-a always,exit -F arch=b64 -F dir=/usr/lib/crowdstrike/ -p wa -F key=falcon_sensor
+
+-a always,exit -F arch=b32 -F dir=/opt/CrowdStrike/ -p wa -F key=falcon_sensor
+-a always,exit -F arch=b64 -F dir=/opt/CrowdStrike/ -p wa -F key=falcon_sensor
+
+-a always,exit -F arch=b32 -F dir=/var/log/crowdstrike/ -p wa -F key=falcon_sensor
+-a always,exit -F arch=b64 -F dir=/var/log/crowdstrike/ -p wa -F key=falcon_sensor
+
+# Identify CrowdStrike Falcon Agent activity
+-a always,exit -F arch=b32 -F path=/usr/bin/falcon-scout -p x -F key=falcon_agent
+-a always,exit -F arch=b64 -F path=/usr/bin/falcon-scout -p x -F key=falcon_agent
+
+-a always,exit -F arch=b32 -F path=/usr/bin/falcon-agent -p x -F key=falcon_agent
+-a always,exit -F arch=b64 -F path=/usr/bin/falcon-agent -p x -F key=falcon_agent
+
+# Identify CrowdStrike Falcon Sensor network
+-a always,exit -F arch=b32 -S connect -F dir=+ -F obj=/opt/CrowdStrike/falcon-sensor -F key=crowdstrike_network
+-a always,exit -F arch=b64 -S connect -F dir=+ -F obj=/opt/CrowdStrike/falcon-sensor -F key=crowdstrike_network
+
 ## Docker
 -w /usr/bin/dockerd -k docker
 -w /usr/bin/docker -k docker
@@ -726,12 +806,13 @@
 -a always,exit -F arch=b64 -S rename -S renameat -S truncate -S chmod -S setxattr -S lsetxattr -S removexattr -S lremovexattr -F exit=-EACCES -k file_modification
 -a always,exit -F arch=b64 -S rename -S renameat -S truncate -S chmod -S setxattr -S lsetxattr -S removexattr -S lremovexattr -F exit=-EPERM -k file_modification
 
-## 32bit API Exploitation
+## 32bit ABI Exploitation
+### https://github.com/linux-audit/audit-userspace/blob/c014eec64b3a16c004f4a75e5792a4ac2fcc0df2/rules/21-no32bit.rules
 ### If you are on a 64 bit platform, everything _should_ be running
 ### in 64 bit mode. This rule will detect any use of the 32 bit syscalls
 ### because this might be a sign of someone exploiting a hole in the 32
-### bit API.
--a always,exit -F arch=b32 -S all -k 32bit_api
+### bit ABI.
+-a always,exit -F arch=b32 -S all -k 32bit_abi
 
 # Make The Configuration Immutable --------------------------------------------
 

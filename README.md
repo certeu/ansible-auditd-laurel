@@ -18,14 +18,16 @@ LAUREL is an event post-processing plugin for auditd(8) to improve its usability
 
 The defaults variables are the following:
 
-- `laurel_user` - This user user will run Laurel plugin;
+- `laurel_user` - This user user will run Laurel plugin
   - Default is `_laurel`
-- `laurel_build_dir` - The directory where the build from sources takes place;
+- `laurel_build_dir` - The directory where the build from sources takes place
   - Default is `/var/_install/laurel`
-- `laurel_user_allowed_read` - Defines the user that will have the right to read the laurel's logs. The role will fail if the user does not exists.
+- `laurel_user_allowed_read` - Defines the user that will have the right to read the laurel's logs. The role will fail if the user does not exists
   - Default is `splunkfwd`
 - `laurel_local_tmp` - Ansible fetches the latest release from GitHub on the Ansible Controller (locally)
   - Default is `/tmp`
+- `laurel_version` - The version of the Laurel to be installed
+  - Default is `latest`
 
 # Usage
 
@@ -52,6 +54,7 @@ You can override the following variable as well, with the following play:
         laurel_build_dir: /var/_install67/laurel
         laurel_user_allowed_read: filebeat
         laurel_local_tmp: /tmp
+        laurel_version: latest
 ```
 
 ## Default: Retrieve last release from GitHub
