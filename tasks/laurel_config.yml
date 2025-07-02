@@ -128,7 +128,9 @@
       ansible.builtin.copy:
         src: "{{ item.path }}"
         dest: "{{ laurel_build_dir }}/selinux/{{ item.path | basename }}"
-      with_items: "{{ found_files.files }}"
+      loop: "{{ found_files.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
       when: test is not defined
 
     - name: Compile SELinux policy
