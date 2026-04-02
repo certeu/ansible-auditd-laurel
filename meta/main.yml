@@ -1,0 +1,19 @@
+galaxy_info:
+  namespace: certeu
+  role_name: ansible-auditd-laurel
+  author: certeu
+  description: Install LAUREL (Linux Audit and Enrichment Layer)
+  licence: GPL-3.0
+
+  platforms:
+    - name: Debian
+      versions:
+        - 10
+        - 11
+        - 12
+    - name: RedHat
+      versions:
+        - 8
+        - 9
+
+dependencies: []
